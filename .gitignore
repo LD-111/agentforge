@@ -5,3 +5,6 @@ dist/
 *.tsbuildinfo
 .tmp-userdata/
 .tmp-extensions/
+.tmp-vscode/
+.tmp-vscode-ext/
+.tmp-demo/

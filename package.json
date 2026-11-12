@@ -3,8 +3,11 @@
   "displayName": "AgentForge",
   "description": "Local-first command center for versioned AI prompt blueprints.",
   "version": "0.1.0",
-  "private": true,
   "publisher": "agentforge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LD-111/agentforge.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -55,7 +58,8 @@
   "scripts": {
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "package": "npm run compile && vsce package --no-dependencies"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
@@ -68,6 +72,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.25.11",
     "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3",
