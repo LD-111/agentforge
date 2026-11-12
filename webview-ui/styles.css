@@ -1,0 +1,31 @@
+@import "tailwindcss" source(".");
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.card {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.tag {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.error {
+  color: var(--vscode-errorForeground);
+}
+
+.tree {
+  background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-editor-foreground);
+}
