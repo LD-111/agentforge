@@ -3,6 +3,9 @@ import { isBlueprintId, slugifyTitle } from "../src/blueprints/id";
 import type { Blueprint, BlueprintVariable, ChangelogEntry } from "../src/blueprints/types";
 import { nextPatch } from "../src/blueprints/version";
 import type { HistoryEntry } from "../src/shared/protocol";
+import { Disclosure } from "./Disclosure";
+import { Icon } from "./Icon";
+import { SOURCE_KINDS, formatSource, parseSource } from "./sources";
 
 interface VariableDraft {
   name: string;
@@ -81,8 +84,8 @@ export function EditorModal({ mode, blueprint, history, notice, onClose, onSave,
     <div className="overlay box-border flex flex-col gap-3 p-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{creating ? "New blueprint" : "Edit blueprint"}</h2>
-        <button type="button" className="button secondary" onClick={onClose}>
-          Close
+        <button type="button" className="icon-button" aria-label="Close editor" title="Close editor" onClick={onClose}>
+          <Icon name="close" />
         </button>
       </div>
       {!creating && (
@@ -123,46 +126,16 @@ export function EditorModal({ mode, blueprint, history, notice, onClose, onSave,
         <h3 className="text-xs font-semibold uppercase tracking-wide opacity-70">Variables</h3>
         <button
           type="button"
-          className="button secondary"
+          className="icon-button"
+          aria-label="Add variable"
+          title="Add variable"
           onClick={() => setVariables((current) => [...current, { name: "", source: "input", fallback: "", default: "" }])}
         >
-          Add
+          <Icon name="plus" />
         </button>
       </div>
       {variables.map((variable, index) => (
-        <div key={index} className="card flex flex-col gap-1 p-2">
-          <input
-            className="field"
-            placeholder="name"
-            value={variable.name}
-            onChange={(event) => updateVariable(index, { name: event.target.value })}
-          />
-          <input
-            className="field"
-            placeholder="source"
-            value={variable.source}
-            onChange={(event) => updateVariable(index, { source: event.target.value })}
-          />
-          <input
-            className="field"
-            placeholder="fallback"
-            value={variable.fallback}
-            onChange={(event) => updateVariable(index, { fallback: event.target.value })}
-          />
-          <input
-            className="field"
-            placeholder="default"
-            value={variable.default}
-            onChange={(event) => updateVariable(index, { default: event.target.value })}
-          />
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => setVariables((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-          >
-            Remove
-          </button>
-        </div>
+        <VariableDraftRow key={index} variable={variable} onChange={(patch) => updateVariable(index, patch)} onRemove={() => setVariables((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
       ))}
 
       <label className="flex flex-col gap-1 text-xs">
@@ -179,36 +152,119 @@ export function EditorModal({ mode, blueprint, history, notice, onClose, onSave,
 
       {!creating && (
         <>
-          <ChangelogList changelog={blueprint.changelog} />
-          <HistoryList
-            history={history}
-            pendingRollback={pendingRollback}
-            onDiff={onDiff}
-            onAskRollback={setPendingRollback}
-            onRollback={onRollback}
-          />
+          <Disclosure title="Changelog">
+            <ChangelogList changelog={blueprint.changelog} />
+          </Disclosure>
+          <Disclosure title="History">
+            <HistoryList
+              history={history}
+              pendingRollback={pendingRollback}
+              onDiff={onDiff}
+              onAskRollback={setPendingRollback}
+              onRollback={onRollback}
+            />
+          </Disclosure>
         </>
       )}
     </div>
   );
 }
 
-function ChangelogList({ changelog }: { changelog: ChangelogEntry[] }) {
+function VariableDraftRow({
+  variable,
+  onChange,
+  onRemove,
+}: {
+  variable: VariableDraft;
+  onChange: (patch: Partial<VariableDraft>) => void;
+  onRemove: () => void;
+}) {
+  const parsed = parseSource(variable.source);
   return (
-    <section className="flex flex-col gap-1">
-      <h3 className="text-xs font-semibold uppercase tracking-wide opacity-70">Changelog</h3>
-      {changelog.length === 0 ? (
-        <p className="text-xs opacity-80">No changelog notes.</p>
-      ) : (
-        <ul className="flex flex-col gap-1 text-xs">
-          {changelog.map((entry) => (
-            <li key={`${entry.version}:${entry.note}`}>
-              v{entry.version}: {entry.note}
-            </li>
+    <div className="card flex flex-col gap-1 p-2">
+      <div className="flex items-center gap-1">
+        <input
+          className="field grow"
+          placeholder="name"
+          aria-label="Variable name"
+          value={variable.name}
+          onChange={(event) => onChange({ name: event.target.value })}
+        />
+        <button type="button" className="icon-button" aria-label="Remove variable" title="Remove variable" onClick={onRemove}>
+          <Icon name="trash" />
+        </button>
+      </div>
+      <div className="flex items-center gap-1">
+        <select
+          className="field grow"
+          aria-label="Variable source"
+          value={parsed.kind}
+          onChange={(event) => {
+            const kind = event.target.value;
+            if (kind === "custom") {
+              onChange({ source: parsed.kind === "custom" ? variable.source : "" });
+              return;
+            }
+            onChange({ source: formatSource(kind, parsed.depth) });
+          }}
+        >
+          {SOURCE_KINDS.map((option) => (
+            <option key={option.kind} value={option.kind}>
+              {option.label}
+            </option>
           ))}
-        </ul>
+        </select>
+        {parsed.kind === "auto:tree" && (
+          <input
+            className="field narrow"
+            aria-label="Tree depth"
+            inputMode="numeric"
+            value={parsed.depth}
+            onChange={(event) => onChange({ source: formatSource("auto:tree", event.target.value) })}
+          />
+        )}
+      </div>
+      {parsed.kind === "custom" && (
+        <input
+          className="field"
+          placeholder="source"
+          aria-label="Custom source"
+          value={variable.source}
+          onChange={(event) => onChange({ source: event.target.value })}
+        />
       )}
-    </section>
+      <div className="flex gap-1">
+        <input
+          className="field grow"
+          placeholder="fallback"
+          aria-label="Fallback"
+          value={variable.fallback}
+          onChange={(event) => onChange({ fallback: event.target.value })}
+        />
+        <input
+          className="field grow"
+          placeholder="default"
+          aria-label="Default"
+          value={variable.default}
+          onChange={(event) => onChange({ default: event.target.value })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChangelogList({ changelog }: { changelog: ChangelogEntry[] }) {
+  if (changelog.length === 0) {
+    return <p className="text-xs opacity-80">No changelog notes.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1 text-xs">
+      {changelog.map((entry) => (
+        <li key={`${entry.version}:${entry.note}`}>
+          v{entry.version}: {entry.note}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -225,44 +281,46 @@ function HistoryList({
   onAskRollback: (version: string | null) => void;
   onRollback: (version: string) => void;
 }) {
+  if (history.length === 0) {
+    return <p className="text-xs opacity-80">No earlier versions.</p>;
+  }
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide opacity-70">History</h3>
-      {history.length === 0 ? (
-        <p className="text-xs opacity-80">No earlier versions.</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {history.map((entry) => (
-            <li key={entry.version} className="card flex flex-col gap-1 p-2 text-xs">
-              <span>
-                v{entry.version}
-                {entry.note ? ` · ${entry.note}` : ""}
-              </span>
-              <div className="flex flex-wrap gap-1">
-                <button type="button" className="button secondary" onClick={() => onDiff(entry.version)}>
-                  View diff
+    <ul className="flex flex-col gap-2">
+      {history.map((entry) => (
+        <li key={entry.version} className="card flex flex-col gap-1 p-2 text-xs">
+          <span>
+            v{entry.version}
+            {entry.note ? ` · ${entry.note}` : ""}
+          </span>
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={`View diff for v${entry.version}`}
+              title="View diff"
+              onClick={() => onDiff(entry.version)}
+            >
+              <Icon name="diff" />
+            </button>
+            {pendingRollback === entry.version ? (
+              <>
+                <span className="self-center">Replace with v{entry.version}?</span>
+                <button type="button" className="button" onClick={() => onRollback(entry.version)}>
+                  Confirm
                 </button>
-                {pendingRollback === entry.version ? (
-                  <>
-                    <span className="self-center">Replace the current blueprint with v{entry.version}?</span>
-                    <button type="button" className="button" onClick={() => onRollback(entry.version)}>
-                      Confirm rollback
-                    </button>
-                    <button type="button" className="button secondary" onClick={() => onAskRollback(null)}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className="button secondary" onClick={() => onAskRollback(entry.version)}>
-                    Rollback
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+                <button type="button" className="button secondary" onClick={() => onAskRollback(null)}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button type="button" className="button secondary" onClick={() => onAskRollback(entry.version)}>
+                Rollback
+              </button>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

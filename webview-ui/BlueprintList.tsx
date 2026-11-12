@@ -1,11 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, type RefObject } from "react";
 import type { SidebarBlueprint } from "../src/shared/protocol";
+import { Icon } from "./Icon";
 
 interface BlueprintListProps {
   items: SidebarBlueprint[];
   selectedId: string | null;
   searching: boolean;
   query: string;
+  contextHint: string;
+  searchRef: RefObject<HTMLInputElement | null>;
   onQueryChange: (query: string) => void;
   onOpenSearch: () => void;
   onCloseSearch: () => void;
@@ -20,6 +23,8 @@ export function BlueprintList({
   selectedId,
   searching,
   query,
+  contextHint,
+  searchRef,
   onQueryChange,
   onOpenSearch,
   onCloseSearch,
@@ -28,32 +33,23 @@ export function BlueprintList({
   onEdit,
   onCreate,
 }: BlueprintListProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     if (searching) {
-      inputRef.current?.focus();
+      searchRef.current?.focus();
     }
-  }, [searching]);
+  }, [searching, searchRef]);
 
-  if (!searching && items.length === 0) {
-    return (
-      <button type="button" className="plain text-xs opacity-80" onClick={onOpenSearch}>
-        No blueprints in ~/.agentforge/blueprints.
-      </button>
-    );
-  }
-
-  const visible = searching ? items.filter((item) => matches(item, query)) : items;
+  const ordered = [...items].sort(compareBlueprints);
+  const visible = searching ? ordered.filter((item) => matches(item, query)) : ordered;
   const trimmed = query.trim();
 
   return (
     <div className="flex flex-col gap-2">
-      {searching && (
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        {searching && (
           <input
-            ref={inputRef}
-            className="field"
+            ref={searchRef}
+            className="field grow"
             value={query}
             placeholder="Search blueprints"
             aria-label="Search blueprints"
@@ -64,43 +60,62 @@ export function BlueprintList({
               }
             }}
           />
-          <button type="button" className="button secondary shrink-0" onClick={onCloseSearch}>
-            Close
-          </button>
-        </div>
-      )}
-      {searching && visible.length === 0 && trimmed.length > 0 && (
-        <p className="text-xs opacity-80">No matching blueprints.</p>
-      )}
-      <ul className="flex flex-col gap-2">
+        )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={searching ? "Close search" : "Search blueprints"}
+          title={searching ? "Close search" : "Search blueprints"}
+          onClick={searching ? onCloseSearch : onOpenSearch}
+        >
+          <Icon name={searching ? "close" : "search"} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={trimmed ? `Create "${trimmed}"` : "New blueprint"}
+          title={trimmed ? `Create "${trimmed}"` : "New blueprint"}
+          onClick={() => onCreate(query)}
+        >
+          <Icon name="plus" />
+        </button>
+      </div>
+      <p className="text-xs opacity-70">{contextHint}</p>
+      {visible.length === 0 && items.length === 0 && <p className="text-xs opacity-80">No blueprints in ~/.agentforge/blueprints.</p>}
+      {searching && visible.length === 0 && items.length > 0 && <p className="text-xs opacity-80">No matching blueprints.</p>}
+      <ul className="flex flex-col gap-0.5">
         {visible.map((item) => {
           const { blueprint } = item;
           const selected = blueprint.id === selectedId;
           return (
-            <li key={blueprint.id} className={selected ? "card selected px-2 py-2" : "card px-2 py-2"}>
-              <div className="flex items-start gap-2">
+            <li key={blueprint.id} className={selected ? "row selected" : "row"}>
+              <div className="flex items-center gap-1 px-1 py-0.5">
                 <button
                   type="button"
-                  className="star shrink-0"
+                  className="icon-button"
                   aria-label={blueprint.favorite ? "Remove favorite" : "Mark as favorite"}
+                  title={blueprint.favorite ? "Remove favorite" : "Mark as favorite"}
+                  aria-pressed={blueprint.favorite ?? false}
                   onClick={() => onToggleFavorite(blueprint.id)}
                 >
-                  {blueprint.favorite ? "★" : "☆"}
+                  <Icon name={blueprint.favorite ? "starFilled" : "star"} />
+                </button>
+                <button type="button" className="flex min-w-0 flex-1 items-baseline gap-2 text-left" onClick={() => onSelect(blueprint.id)}>
+                  <span className="truncate text-sm">{blueprint.title}</span>
+                  <span className="shrink-0 text-xs opacity-70">v{blueprint.version}</span>
                 </button>
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => (searching ? onSelect(blueprint.id) : onOpenSearch())}
+                  className="icon-button"
+                  aria-label={`Edit ${blueprint.title}`}
+                  title="Edit blueprint"
+                  onClick={() => onEdit(blueprint.id)}
                 >
-                  <span className="block text-sm">{blueprint.title}</span>
-                  <span className="text-xs opacity-70">v{blueprint.version}</span>
-                </button>
-                <button type="button" className="button secondary shrink-0" onClick={() => onEdit(blueprint.id)}>
-                  Edit
+                  <Icon name="pencil" />
                 </button>
               </div>
-              {blueprint.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
+              {selected && blueprint.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 px-2 pb-1">
                   {blueprint.tags.map((tag) => (
                     <span key={tag} className="tag rounded px-1.5 py-0.5 text-xs">
                       {tag}
@@ -111,16 +126,17 @@ export function BlueprintList({
             </li>
           );
         })}
-        {searching && (
-          <li>
-            <button type="button" className="button w-full" onClick={() => onCreate(query)}>
-              {trimmed ? `Create "${trimmed}"` : "Create new blueprint"}
-            </button>
-          </li>
-        )}
       </ul>
     </div>
   );
+}
+
+export function compareBlueprints(left: SidebarBlueprint, right: SidebarBlueprint): number {
+  const favorite = Number(Boolean(right.blueprint.favorite)) - Number(Boolean(left.blueprint.favorite));
+  if (favorite !== 0) {
+    return favorite;
+  }
+  return left.blueprint.title.localeCompare(right.blueprint.title);
 }
 
 function matches(item: SidebarBlueprint, query: string): boolean {
