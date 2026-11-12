@@ -8,6 +8,7 @@ export function activate(context: vscode.ExtensionContext): void {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.commands.registerCommand("agentforge.refresh", () => provider.refresh()),
+    vscode.commands.registerCommand("agentforge.compileBlueprint", () => provider.compileFromPalette()),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void provider.refresh();
     }),

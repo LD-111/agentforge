@@ -1,16 +1,33 @@
 import { useEffect, useState } from "react";
-import type { SidebarState } from "../src/shared/protocol";
-import type { WorkspaceContext } from "../src/scanner/types";
+import type { Blueprint } from "../src/blueprints/types";
+import type { HostMessage, SidebarBlueprint, SidebarState } from "../src/shared/protocol";
+import { BlueprintList } from "./BlueprintList";
+import { EditorModal } from "./EditorModal";
+import { Preview } from "./Preview";
+import { VariableForm } from "./VariableForm";
 
 const vscode = acquireVsCodeApi();
 
 export function App() {
   const [state, setState] = useState<SidebarState | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent<SidebarState>) => {
-      if (event.data?.type === "state") {
-        setState(event.data);
+    const onMessage = (event: MessageEvent<HostMessage>) => {
+      const message = event.data;
+      if (!message || typeof message !== "object" || !("type" in message)) {
+        return;
+      }
+      if (message.type === "state") {
+        setState(message);
+      } else if (message.type === "notice") {
+        setNotice(message.message);
+      } else if (message.type === "saved") {
+        setEditingId(null);
+        setNotice(null);
       }
     };
     window.addEventListener("message", onMessage);
@@ -18,44 +35,50 @@ export function App() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
+  useEffect(() => {
+    if (!state || state.blueprints.length === 0) {
+      return;
+    }
+    if (!selectedId || !state.blueprints.some((item) => item.blueprint.id === selectedId)) {
+      setSelectedId(state.blueprints[0]?.blueprint.id ?? null);
+    }
+  }, [state, selectedId]);
+
   if (!state) {
     return <p className="p-3 text-xs opacity-80">Loading blueprints…</p>;
   }
 
+  const selected = state.blueprints.find((item) => item.blueprint.id === selectedId) ?? null;
+  const editing = state.blueprints.find((item) => item.blueprint.id === editingId) ?? null;
+  const values = selected ? effectiveValues(selected, overrides[selected.blueprint.id]) : {};
+
   return (
-    <div className="box-border flex flex-col gap-4 p-3">
+    <div className="relative box-border flex min-h-full flex-col gap-4 p-3">
       <header>
         <h1 className="text-sm font-semibold">AgentForge</h1>
-        <p className="mt-1 text-xs opacity-80">Local prompt blueprints</p>
+        <p className="mt-1 text-xs opacity-80">
+          {state.context
+            ? `Framework ${state.context.framework} · Language ${state.context.language}`
+            : "Open a folder to scan the workspace."}
+        </p>
       </header>
+      {notice && !editing && <p className="error text-xs">{notice}</p>}
 
-      <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-70">Blueprints</h2>
-        {state.blueprints.length === 0 ? (
-          <p className="text-xs opacity-80">No blueprints in ~/.agentforge/blueprints.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {state.blueprints.map((blueprint) => (
-              <li key={blueprint.id} className="card px-2 py-2">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm">{blueprint.title}</span>
-                  <span className="shrink-0 text-xs opacity-70">v{blueprint.version}</span>
-                </div>
-                {blueprint.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {blueprint.tags.map((tag) => (
-                      <span key={tag} className="tag rounded px-1.5 py-0.5 text-xs">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide opacity-70">Blueprints</h2>
+        <BlueprintList
+          items={state.blueprints}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onToggleFavorite={(id) => vscode.postMessage({ type: "toggleFavorite", id })}
+          onEdit={(id) => {
+            setSelectedId(id);
+            setNotice(null);
+            setEditingId(id);
+          }}
+        />
         {state.errors.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-1">
+          <ul className="flex flex-col gap-1">
             {state.errors.map((error) => (
               <li key={`${error.filePath}:${error.message}`} className="error text-xs">
                 {error.filePath ? `${error.filePath}: ` : ""}
@@ -66,53 +89,60 @@ export function App() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-70">Workspace</h2>
-        {state.context ? (
-          <ContextSummary context={state.context} />
-        ) : (
-          <p className="text-xs opacity-80">Open a folder to scan the workspace.</p>
-        )}
-      </section>
+      {selected && (
+        <>
+          <VariableForm
+            variables={selected.blueprint.variables}
+            values={values}
+            onChange={(name, value) =>
+              setOverrides((current) => ({
+                ...current,
+                [selected.blueprint.id]: { ...current[selected.blueprint.id], [name]: value },
+              }))
+            }
+            onReset={() =>
+              setOverrides((current) => {
+                const next = { ...current };
+                delete next[selected.blueprint.id];
+                return next;
+              })
+            }
+            onCompile={() =>
+              vscode.postMessage({ type: "compile", id: selected.blueprint.id, values })
+            }
+          />
+          <Preview body={selected.blueprint.body} values={values} />
+        </>
+      )}
+
+      {editing && (
+        <EditorModal
+          key={editing.blueprint.id}
+          blueprint={editing.blueprint}
+          history={editing.history}
+          notice={notice}
+          onClose={() => {
+            setEditingId(null);
+            setNotice(null);
+          }}
+          onSave={(blueprint: Blueprint, note: string) => vscode.postMessage({ type: "save", blueprint, note })}
+          onDiff={(version) => vscode.postMessage({ type: "diff", id: editing.blueprint.id, version })}
+          onRollback={(version) => vscode.postMessage({ type: "rollback", id: editing.blueprint.id, version })}
+        />
+      )}
     </div>
   );
 }
 
-function ContextSummary({ context }: { context: WorkspaceContext }) {
-  return (
-    <div className="flex flex-col gap-3 text-xs">
-      <p>
-        <span className="opacity-70">Framework </span>
-        {context.framework}
-      </p>
-      <p>
-        <span className="opacity-70">Language </span>
-        {context.language}
-      </p>
-      <div>
-        <p className="mb-1 opacity-70">Dependencies</p>
-        {context.dependencies.length === 0 ? (
-          <p className="opacity-80">None detected.</p>
-        ) : (
-          <p>{context.dependencies.join(", ")}</p>
-        )}
-      </div>
-      <div>
-        <p className="mb-1 opacity-70">Folder tree</p>
-        <pre className="tree max-h-40 overflow-auto whitespace-pre rounded p-2 font-mono">{context.folderTree}</pre>
-      </div>
-      <div>
-        <p className="mb-1 opacity-70">Existing rules</p>
-        {context.existingRules.length === 0 ? (
-          <p className="opacity-80">No AGENTS.md or .cursor/rules files.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {context.existingRules.map((rule) => (
-              <li key={rule.path}>{rule.path}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
+function effectiveValues(item: SidebarBlueprint, override: Record<string, string> | undefined): Record<string, string> {
+  const values = { ...item.values };
+  if (!override) {
+    return values;
+  }
+  for (const variable of item.blueprint.variables) {
+    if (Object.prototype.hasOwnProperty.call(override, variable.name)) {
+      values[variable.name] = override[variable.name] ?? "";
+    }
+  }
+  return values;
 }

@@ -36,6 +36,10 @@
         "command": "agentforge.refresh",
         "title": "AgentForge: Refresh Blueprints",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "agentforge.compileBlueprint",
+        "title": "AgentForge: Compile Blueprint"
       }
     ],
     "menus": {

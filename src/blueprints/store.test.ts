@@ -83,4 +83,52 @@ describe("BlueprintStore", () => {
     }
     expect(result.error.message).toBe("Blueprint not found: missing-blueprint");
   });
+
+  it("archives the previous version on bump and keeps the first snapshot", async () => {
+    const parent = await tempDir();
+    const store = new BlueprintStore(path.join(parent, "blueprints"));
+    await store.save(blueprint);
+    await store.save({
+      ...blueprint,
+      version: "1.1.0",
+      body: "Updated prompt.",
+      changelog: [{ version: "1.1.0", note: "Tightened the instructions." }, ...blueprint.changelog],
+    });
+
+    const history = await store.listHistory(blueprint.id);
+    expect(history.map((item) => item.version)).toEqual(["1.0.0"]);
+    expect(history[0]?.body).toBe(blueprint.body);
+
+    await store.rollback(blueprint.id, "1.0.0");
+    await store.save({ ...blueprint, body: "Edited in place." });
+    const reread = await store.readHistory(blueprint.id, "1.0.0");
+    expect(reread.ok).toBe(true);
+    if (!reread.ok) {
+      return;
+    }
+    expect(reread.blueprint.body).toBe(blueprint.body);
+  });
+
+  it("rolls back to a snapshot and can round-trip a favorite flag", async () => {
+    const parent = await tempDir();
+    const store = new BlueprintStore(path.join(parent, "blueprints"));
+    await store.save(blueprint);
+    await store.save({ ...blueprint, version: "1.1.0", body: "Newer body." });
+
+    const restored = await store.rollback(blueprint.id, "1.0.0");
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) {
+      return;
+    }
+    expect(restored.blueprint.body).toBe(blueprint.body);
+    expect(restored.blueprint.version).toBe("1.0.0");
+
+    await store.save({ ...restored.blueprint, favorite: true });
+    const favorite = await store.read(blueprint.id);
+    expect(favorite.ok).toBe(true);
+    if (!favorite.ok) {
+      return;
+    }
+    expect(favorite.blueprint.favorite).toBe(true);
+  });
 });

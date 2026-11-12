@@ -15,6 +15,7 @@ export interface Blueprint {
   title: string;
   version: string;
   tags: string[];
+  favorite?: boolean;
   variables: BlueprintVariable[];
   changelog: ChangelogEntry[];
   body: string;

@@ -46,6 +46,7 @@ export function parseBlueprint(raw: string, filePath: string): ParseResult {
       title: asNonEmptyString(data.title) as string,
       version: asNonEmptyString(data.version) as string,
       tags: readTags(data.tags),
+      ...(data.favorite === true ? { favorite: true } : {}),
       variables: variables.value,
       changelog: changelog.value,
       body: parsed.content.trim(),
@@ -61,6 +62,7 @@ export function serializeBlueprint(blueprint: Blueprint): string {
     title: blueprint.title,
     version: blueprint.version,
     tags: blueprint.tags,
+    ...(blueprint.favorite ? { favorite: true } : {}),
     variables: blueprint.variables,
     changelog: blueprint.changelog,
   });

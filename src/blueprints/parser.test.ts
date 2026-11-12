@@ -87,6 +87,23 @@ describe("parseBlueprint", () => {
     expect(result.blueprint).not.toHaveProperty("author");
   });
 
+  it("round-trips a favorite flag and omits it when unset", () => {
+    const favorite = serializeBlueprint({ ...sample, favorite: true });
+    const parsed = parseBlueprint(favorite, sample.filePath);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+    expect(parsed.blueprint.favorite).toBe(true);
+
+    const plain = parseBlueprint(serializeBlueprint(sample), sample.filePath);
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) {
+      return;
+    }
+    expect(plain.blueprint).not.toHaveProperty("favorite");
+  });
+
   it("returns a structured error for invalid YAML", () => {
     const result = parseBlueprint("---\nid: [unterminated\n---\n", "bad.md");
     expect(result.ok).toBe(false);

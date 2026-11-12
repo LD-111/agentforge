@@ -11,6 +11,10 @@ body,
   font-size: var(--vscode-font-size);
 }
 
+#root {
+  position: relative;
+}
+
 .card {
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
@@ -28,4 +32,54 @@ body,
 .tree {
   background: var(--vscode-textCodeBlock-background);
   color: var(--vscode-editor-foreground);
+}
+
+.card.selected {
+  border-color: var(--vscode-focusBorder);
+}
+
+.button {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 2px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.button.secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  padding: 4px 6px;
+  font: inherit;
+}
+
+.star {
+  background: transparent;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: auto;
+  background: var(--vscode-editor-background);
 }
