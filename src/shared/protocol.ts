@@ -40,6 +40,12 @@ export interface SaveMessage {
   note: string;
 }
 
+export interface CreateMessage {
+  type: "create";
+  blueprint: Blueprint;
+  note: string;
+}
+
 export interface DiffMessage {
   type: "diff";
   id: string;
@@ -57,6 +63,7 @@ export type WebviewMessage =
   | CompileMessage
   | ToggleFavoriteMessage
   | SaveMessage
+  | CreateMessage
   | DiffMessage
   | RollbackMessage;
 
@@ -67,6 +74,7 @@ export interface NoticeMessage {
 
 export interface SavedMessage {
   type: "saved";
+  id?: string;
 }
 
 export type HostMessage = SidebarState | NoticeMessage | SavedMessage;

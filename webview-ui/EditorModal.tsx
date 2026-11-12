@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isBlueprintId, slugifyTitle } from "../src/blueprints/id";
 import type { Blueprint, BlueprintVariable, ChangelogEntry } from "../src/blueprints/types";
 import { nextPatch } from "../src/blueprints/version";
 import type { HistoryEntry } from "../src/shared/protocol";
@@ -11,6 +12,7 @@ interface VariableDraft {
 }
 
 interface EditorModalProps {
+  mode: "create" | "edit";
   blueprint: Blueprint;
   history: HistoryEntry[];
   notice: string | null;
@@ -20,11 +22,14 @@ interface EditorModalProps {
   onRollback: (version: string) => void;
 }
 
-export function EditorModal({ blueprint, history, notice, onClose, onSave, onDiff, onRollback }: EditorModalProps) {
+export function EditorModal({ mode, blueprint, history, notice, onClose, onSave, onDiff, onRollback }: EditorModalProps) {
+  const creating = mode === "create";
   const [title, setTitle] = useState(blueprint.title);
+  const [id, setId] = useState(blueprint.id);
+  const [idEdited, setIdEdited] = useState(false);
   const [tags, setTags] = useState(blueprint.tags.join(", "));
   const [body, setBody] = useState(blueprint.body);
-  const [version, setVersion] = useState(nextPatch(blueprint.version));
+  const [version, setVersion] = useState(creating ? blueprint.version : nextPatch(blueprint.version));
   const [note, setNote] = useState("");
   const [variables, setVariables] = useState<VariableDraft[]>(
     blueprint.variables.map((variable) => ({
@@ -41,8 +46,15 @@ export function EditorModal({ blueprint, history, notice, onClose, onSave, onDif
     setVariables((current) => current.map((variable, itemIndex) => (itemIndex === index ? { ...variable, ...patch } : variable)));
   }
 
+  function updateTitle(value: string): void {
+    setTitle(value);
+    if (creating && !idEdited) {
+      setId(slugifyTitle(value));
+    }
+  }
+
   function save(): void {
-    const problem = validate(title, version, note, blueprint.version, variables);
+    const problem = validate(title, version, note, blueprint.version, variables, creating ? id : undefined);
     if (problem) {
       setError(problem);
       return;
@@ -51,6 +63,7 @@ export function EditorModal({ blueprint, history, notice, onClose, onSave, onDif
     onSave(
       {
         ...blueprint,
+        ...(creating ? { id: id.trim() } : {}),
         title: title.trim(),
         version: version.trim(),
         tags: tags
@@ -67,20 +80,35 @@ export function EditorModal({ blueprint, history, notice, onClose, onSave, onDif
   return (
     <div className="overlay box-border flex flex-col gap-3 p-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Edit blueprint</h2>
+        <h2 className="text-sm font-semibold">{creating ? "New blueprint" : "Edit blueprint"}</h2>
         <button type="button" className="button secondary" onClick={onClose}>
           Close
         </button>
       </div>
-      <p className="text-xs opacity-70">
-        {blueprint.id} · current v{blueprint.version}
-      </p>
+      {!creating && (
+        <p className="text-xs opacity-70">
+          {blueprint.id} · current v{blueprint.version}
+        </p>
+      )}
       {notice && <p className="error text-xs">{notice}</p>}
       {error && <p className="error text-xs">{error}</p>}
 
+      {creating && (
+        <label className="flex flex-col gap-1 text-xs">
+          Id
+          <input
+            className="field"
+            value={id}
+            onChange={(event) => {
+              setIdEdited(true);
+              setId(event.target.value);
+            }}
+          />
+        </label>
+      )}
       <label className="flex flex-col gap-1 text-xs">
         Title
-        <input className="field" value={title} onChange={(event) => setTitle(event.target.value)} />
+        <input className="field" value={title} onChange={(event) => updateTitle(event.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-xs">
         Tags
@@ -149,14 +177,18 @@ export function EditorModal({ blueprint, history, notice, onClose, onSave, onDif
         Save
       </button>
 
-      <ChangelogList changelog={blueprint.changelog} />
-      <HistoryList
-        history={history}
-        pendingRollback={pendingRollback}
-        onDiff={onDiff}
-        onAskRollback={setPendingRollback}
-        onRollback={onRollback}
-      />
+      {!creating && (
+        <>
+          <ChangelogList changelog={blueprint.changelog} />
+          <HistoryList
+            history={history}
+            pendingRollback={pendingRollback}
+            onDiff={onDiff}
+            onAskRollback={setPendingRollback}
+            onRollback={onRollback}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -254,14 +286,22 @@ function validate(
   note: string,
   currentVersion: string,
   variables: VariableDraft[],
+  id?: string,
 ): string | undefined {
+  if (id !== undefined && !isBlueprintId(id.trim())) {
+    return "Id must start with a letter or number and use only letters, numbers, and hyphens.";
+  }
   if (!title.trim()) {
     return "Title is required.";
   }
   if (!version.trim()) {
     return "Version is required.";
   }
-  if (version.trim() !== currentVersion && !note.trim()) {
+  if (id !== undefined) {
+    if (!note.trim()) {
+      return "An evolution note is required.";
+    }
+  } else if (version.trim() !== currentVersion && !note.trim()) {
     return "An evolution note is required when the version changes.";
   }
   const names = variables.map((variable) => variable.name.trim());

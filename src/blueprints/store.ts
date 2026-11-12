@@ -1,11 +1,10 @@
 import { mkdir, readdir, readFile, copyFile, writeFile, access } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { isBlueprintId } from "./id";
 import { parseBlueprint, serializeBlueprint } from "./parser";
 import type { Blueprint, BlueprintParseError, ParseResult } from "./types";
 import { isSafeVersion } from "./version";
-
-const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
 
 export function defaultBlueprintDir(): string {
   return path.join(os.homedir(), ".agentforge", "blueprints");
@@ -176,7 +175,7 @@ export class BlueprintStore {
   }
 
   private assertId(id: string): void {
-    if (!ID_PATTERN.test(id)) {
+    if (!isBlueprintId(id)) {
       throw new Error(`Invalid blueprint id: ${id}`);
     }
   }

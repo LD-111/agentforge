@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import path from "node:path";
 import { compilePrompt } from "../blueprints/compile";
+import { isBlueprintId } from "../blueprints/id";
 import { resolveVariables } from "../blueprints/resolve";
 import { BlueprintStore } from "../blueprints/store";
 import type { Blueprint, BlueprintVariable } from "../blueprints/types";
@@ -105,6 +106,9 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
         case "save":
           await this.save(message.blueprint, message.note);
           return;
+        case "create":
+          await this.create(message.blueprint, message.note);
+          return;
         case "diff":
           await this.showDiff(message.id, message.version);
           return;
@@ -185,6 +189,43 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
 
     await this.store.save(next);
     await this.post({ type: "saved" });
+    await this.refresh();
+  }
+
+  private async create(blueprint: Blueprint, note: string): Promise<void> {
+    const id = blueprint.id.trim();
+    if (!isBlueprintId(id)) {
+      await this.notice("Blueprint id must start with a letter or number and use only letters, numbers, and hyphens.");
+      return;
+    }
+    const existing = await this.store.read(id);
+    if (existing.ok || !existing.error.message.startsWith("Blueprint not found:")) {
+      await this.notice(`A blueprint named ${id} already exists.`);
+      return;
+    }
+    if (!Array.isArray(blueprint.tags) || !Array.isArray(blueprint.variables)) {
+      await this.notice("The blueprint edit was incomplete.");
+      return;
+    }
+    const problem = validateCreate(blueprint, note);
+    if (problem) {
+      await this.notice(problem);
+      return;
+    }
+
+    const version = blueprint.version.trim();
+    const next: Blueprint = {
+      id,
+      title: blueprint.title.trim(),
+      version,
+      tags: blueprint.tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0),
+      variables: cleanVariables(blueprint.variables),
+      changelog: [{ version, note: note.trim() }],
+      body: blueprint.body,
+      filePath: "",
+    };
+    await this.store.save(next);
+    await this.post({ type: "saved", id });
     await this.refresh();
   }
 
@@ -287,8 +328,29 @@ function validateSave(blueprint: Blueprint, note: string, currentVersion: string
   if (version !== currentVersion && !note.trim()) {
     return "An evolution note is required when the version changes.";
   }
+  return validateVariables(blueprint.variables);
+}
+
+function validateCreate(blueprint: Blueprint, note: string): string | undefined {
+  if (!blueprint.title.trim()) {
+    return "Title is required.";
+  }
+  const version = blueprint.version.trim();
+  if (!version) {
+    return "Version is required.";
+  }
+  if (!isSafeVersion(version)) {
+    return "Version contains unsupported characters.";
+  }
+  if (!note.trim()) {
+    return "An evolution note is required.";
+  }
+  return validateVariables(blueprint.variables);
+}
+
+function validateVariables(variables: BlueprintVariable[]): string | undefined {
   const names = new Set<string>();
-  for (const variable of blueprint.variables) {
+  for (const variable of variables) {
     const name = variable.name.trim();
     if (!/^[A-Za-z0-9_]+$/.test(name)) {
       return `Invalid variable name: ${name || "(empty)"}`;

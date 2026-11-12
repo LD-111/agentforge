@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { slugifyTitle } from "../src/blueprints/id";
 import type { Blueprint } from "../src/blueprints/types";
 import type { HostMessage, SidebarBlueprint, SidebarState } from "../src/shared/protocol";
 import { BlueprintList } from "./BlueprintList";
@@ -13,7 +14,11 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Blueprint | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const pendingSelect = useRef<string | null>(null);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostMessage>) => {
@@ -26,6 +31,11 @@ export function App() {
       } else if (message.type === "notice") {
         setNotice(message.message);
       } else if (message.type === "saved") {
+        if (message.id) {
+          pendingSelect.current = message.id;
+          setSelectedId(message.id);
+        }
+        setDraft(null);
         setEditingId(null);
         setNotice(null);
       }
@@ -39,6 +49,13 @@ export function App() {
     if (!state || state.blueprints.length === 0) {
       return;
     }
+    if (pendingSelect.current) {
+      if (state.blueprints.some((item) => item.blueprint.id === pendingSelect.current)) {
+        setSelectedId(pendingSelect.current);
+        pendingSelect.current = null;
+      }
+      return;
+    }
     if (!selectedId || !state.blueprints.some((item) => item.blueprint.id === selectedId)) {
       setSelectedId(state.blueprints[0]?.blueprint.id ?? null);
     }
@@ -49,7 +66,7 @@ export function App() {
   }
 
   const selected = state.blueprints.find((item) => item.blueprint.id === selectedId) ?? null;
-  const editing = state.blueprints.find((item) => item.blueprint.id === editingId) ?? null;
+  const editingExisting = state.blueprints.find((item) => item.blueprint.id === editingId) ?? null;
   const values = selected ? effectiveValues(selected, overrides[selected.blueprint.id]) : {};
 
   return (
@@ -62,19 +79,54 @@ export function App() {
             : "Open a folder to scan the workspace."}
         </p>
       </header>
-      {notice && !editing && <p className="error text-xs">{notice}</p>}
+      {notice && !draft && !editingExisting && <p className="error text-xs">{notice}</p>}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide opacity-70">Blueprints</h2>
         <BlueprintList
           items={state.blueprints}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          searching={searching}
+          query={query}
+          onQueryChange={setQuery}
+          onOpenSearch={() => {
+            setQuery("");
+            setSearching(true);
+          }}
+          onCloseSearch={() => {
+            setSearching(false);
+            setQuery("");
+          }}
+          onSelect={(id) => {
+            setSelectedId(id);
+            setSearching(false);
+            setQuery("");
+          }}
           onToggleFavorite={(id) => vscode.postMessage({ type: "toggleFavorite", id })}
           onEdit={(id) => {
+            setSearching(false);
+            setQuery("");
+            setDraft(null);
             setSelectedId(id);
             setNotice(null);
             setEditingId(id);
+          }}
+          onCreate={(title) => {
+            const trimmed = title.trim();
+            setSearching(false);
+            setQuery("");
+            setNotice(null);
+            setEditingId(null);
+            setDraft({
+              id: slugifyTitle(trimmed),
+              title: trimmed,
+              version: "1.0.0",
+              tags: [],
+              variables: [],
+              changelog: [],
+              body: "",
+              filePath: "",
+            });
           }}
         />
         {state.errors.length > 0 && (
@@ -115,19 +167,36 @@ export function App() {
         </>
       )}
 
-      {editing && (
+      {draft && (
         <EditorModal
-          key={editing.blueprint.id}
-          blueprint={editing.blueprint}
-          history={editing.history}
+          key="create"
+          mode="create"
+          blueprint={draft}
+          history={[]}
+          notice={notice}
+          onClose={() => {
+            setDraft(null);
+            setNotice(null);
+          }}
+          onSave={(blueprint: Blueprint, note: string) => vscode.postMessage({ type: "create", blueprint, note })}
+          onDiff={() => undefined}
+          onRollback={() => undefined}
+        />
+      )}
+      {editingExisting && !draft && (
+        <EditorModal
+          key={editingExisting.blueprint.id}
+          mode="edit"
+          blueprint={editingExisting.blueprint}
+          history={editingExisting.history}
           notice={notice}
           onClose={() => {
             setEditingId(null);
             setNotice(null);
           }}
           onSave={(blueprint: Blueprint, note: string) => vscode.postMessage({ type: "save", blueprint, note })}
-          onDiff={(version) => vscode.postMessage({ type: "diff", id: editing.blueprint.id, version })}
-          onRollback={(version) => vscode.postMessage({ type: "rollback", id: editing.blueprint.id, version })}
+          onDiff={(version) => vscode.postMessage({ type: "diff", id: editingExisting.blueprint.id, version })}
+          onRollback={(version) => vscode.postMessage({ type: "rollback", id: editingExisting.blueprint.id, version })}
         />
       )}
     </div>

@@ -68,12 +68,18 @@ body,
   font: inherit;
 }
 
-.star {
+.star,
+.plain {
   background: transparent;
   color: inherit;
   border: none;
   cursor: pointer;
   padding: 0;
+}
+
+.plain {
+  font: inherit;
+  text-align: left;
 }
 
 .overlay {
