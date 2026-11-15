@@ -6,13 +6,17 @@ interface DisclosureProps {
   meta?: string;
   aside?: ReactNode;
   children: ReactNode;
+  defaultOpen?: boolean;
+  fill?: boolean;
 }
 
-export function Disclosure({ title, meta, aside, children }: DisclosureProps) {
-  const [open, setOpen] = useState(false);
+export function Disclosure({ title, meta, aside, children, defaultOpen = false, fill = false }: DisclosureProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const fillOpen = fill && open;
+  const panel = fill ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : children;
 
   return (
-    <section className="flex flex-col gap-2">
+    <section className={fillOpen ? "preview-fill flex flex-col gap-2" : "flex flex-col gap-2"}>
       <div className="flex items-center justify-between gap-2">
         <button type="button" className="disclosure min-w-0 flex-1" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
           <Icon name="chevron" className="chevron" />
@@ -21,7 +25,7 @@ export function Disclosure({ title, meta, aside, children }: DisclosureProps) {
         </button>
         {aside}
       </div>
-      {open ? children : null}
+      {open ? panel : null}
     </section>
   );
 }

@@ -8,7 +8,7 @@ import type { Blueprint, BlueprintVariable } from "../blueprints/types";
 import { isSafeVersion } from "../blueprints/version";
 import { scanWorkspace } from "../scanner/scanWorkspace";
 import type { HostMessage, SidebarBlueprint, SidebarState, WebviewMessage } from "../shared/protocol";
-import { copyAndFocus } from "./launch";
+import { copyAndFocus, insertIntoAgent } from "./launch";
 
 export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = "agentforge.sidebar";
@@ -98,7 +98,7 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
           await this.refresh();
           return;
         case "compile":
-          await this.compile(message.id, message.values);
+          await this.compile(message.id, message.values, message.mode);
           return;
         case "toggleFavorite":
           await this.toggleFavorite(message.id);
@@ -124,7 +124,7 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async compile(id: string, values: Record<string, string>): Promise<void> {
+  private async compile(id: string, values: Record<string, string>, mode?: "copy" | "insert"): Promise<void> {
     if (!isStringRecord(values)) {
       await this.notice("Compiled values must be text.");
       return;
@@ -134,7 +134,12 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
       await this.notice(result.error.message);
       return;
     }
-    await copyAndFocus(compilePrompt(result.blueprint.body, values));
+    const compiled = compilePrompt(result.blueprint.body, values);
+    if (mode === "insert") {
+      await insertIntoAgent(compiled);
+      return;
+    }
+    await copyAndFocus(compiled);
   }
 
   private async toggleFavorite(id: string): Promise<void> {

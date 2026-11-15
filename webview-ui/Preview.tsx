@@ -8,8 +8,8 @@ interface PreviewProps {
 
 export function Preview({ body, values }: PreviewProps) {
   return (
-    <Disclosure title="Preview">
-      <pre className="tree max-h-48 overflow-auto whitespace-pre-wrap rounded p-2 font-mono">{compilePrompt(body, values)}</pre>
+    <Disclosure title="Preview" defaultOpen fill>
+      <pre className="tree min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded p-2 font-mono">{compilePrompt(body, values)}</pre>
     </Disclosure>
   );
 }

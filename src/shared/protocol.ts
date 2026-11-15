@@ -27,6 +27,7 @@ export interface CompileMessage {
   type: "compile";
   id: string;
   values: Record<string, string>;
+  mode?: "copy" | "insert";
 }
 
 export interface ToggleFavoriteMessage {

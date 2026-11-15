@@ -11,7 +11,7 @@
 ## Webview to host (`WebviewMessage`)
 
 - `ready` — webview mounted; host loads state.
-- `compile` — `{ id, values }`. `values` must be a string record.
+- `compile` — `{ id, values, mode? }`. `values` must be a string record. `mode` is `"copy"` or `"insert"`. Omitted means copy.
 - `toggleFavorite` — `{ id }`.
 - `save` — `{ blueprint, note }` for an existing id.
 - `create` — `{ blueprint, note }` for a new id.

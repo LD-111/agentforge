@@ -96,7 +96,20 @@ body,
   transform: rotate(90deg);
 }
 
+.sidebar-top {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.preview-fill {
+  flex: 1 0 0%;
+  min-height: 8rem;
+  overflow: hidden;
+}
+
 .sticky-footer {
+  position: relative;
   flex-shrink: 0;
   padding: 8px;
   background: var(--vscode-editor-background);
@@ -124,6 +137,61 @@ body,
 .button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.split-button {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+.split-main {
+  flex: 1;
+  border-radius: 2px 0 0 2px;
+}
+
+.split-caret {
+  flex: 0 0 auto;
+  border-radius: 0 2px 2px 0;
+  padding-right: 6px;
+  padding-left: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--vscode-button-foreground) 35%, transparent);
+}
+
+.split-caret-icon {
+  transform: rotate(-90deg);
+}
+
+.split-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 3;
+  min-width: 8rem;
+  padding: 4px 0;
+  background: var(--vscode-menu-background);
+  color: var(--vscode-menu-foreground);
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  border-radius: 4px;
+}
+
+.split-menu-item {
+  display: block;
+  width: 100%;
+  padding: 4px 12px;
+  background: transparent;
+  color: inherit;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.split-menu-item:hover,
+.split-menu-item:focus-visible {
+  background: var(--vscode-menu-selectionBackground);
+  color: var(--vscode-menu-selectionForeground);
+  outline: none;
 }
 
 .field {

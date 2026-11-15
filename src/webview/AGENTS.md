@@ -5,7 +5,7 @@ Extension-side owner of the sidebar. This is the only `src` folder that should i
 ## Public surface
 
 - [AgentForgeViewProvider.ts](AgentForgeViewProvider.ts) — `AgentForgeViewProvider`. View id `agentforge.sidebar`.
-- [launch.ts](launch.ts) — `copyAndFocus`.
+- [launch.ts](launch.ts) — `copyAndFocus`, `insertIntoAgent`.
 
 `resolveWebviewView` enables scripts, limits local resources to `dist/`, and serves HTML with a nonce CSP (`default-src 'none'`, styles from the webview source plus `unsafe-inline`, script only with the nonce).
 
@@ -20,6 +20,8 @@ Save and create require a title, a safe version, unique variable names matching 
 `showDiff` uses `vscode.diff` on the history file and the current file. `rollback` goes through `BlueprintStore.rollback`.
 
 `copyAndFocus` writes the clipboard, then tries `composerMode.agent` and `aichat.newchataction`. If neither command exists, it tells the user to open the agent input and paste.
+
+`insertIntoAgent` writes the clipboard, focuses `composer.focusComposer` when that command exists, and pastes into the current agent input without submitting. It restores the previous clipboard after a successful paste. If the command is missing, focus or paste fails, or the paste changes the active editor, it leaves the prompt on the clipboard and shows the same paste hint. It does not open a new chat or submit the prompt. `compile` calls it when `mode` is `"insert"` and calls `copyAndFocus` otherwise. Omitted `mode` means copy. The palette command always copies.
 
 ## Guardrails
 

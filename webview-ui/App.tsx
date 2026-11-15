@@ -19,11 +19,13 @@ export function App() {
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [actionLabel, setActionLabel] = useState<ActionLabel>("idle");
+  const [menuOpen, setMenuOpen] = useState(false);
   const pendingSelect = useRef<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const copiedTimer = useRef<number | null>(null);
-  const copyRef = useRef<() => void>(() => undefined);
+  const actionTimer = useRef<number | null>(null);
+  const sendRef = useRef<() => void>(() => undefined);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostMessage>) => {
@@ -35,7 +37,7 @@ export function App() {
         setState(message);
       } else if (message.type === "notice") {
         setNotice(message.message);
-        dismissCopied(copiedTimer, setCopied);
+        dismissAction(actionTimer, setActionLabel);
       } else if (message.type === "saved") {
         if (message.id) {
           pendingSelect.current = message.id;
@@ -53,8 +55,8 @@ export function App() {
 
   useEffect(() => {
     return () => {
-      if (copiedTimer.current !== null) {
-        window.clearTimeout(copiedTimer.current);
+      if (actionTimer.current !== null) {
+        window.clearTimeout(actionTimer.current);
       }
     };
   }, []);
@@ -77,7 +79,8 @@ export function App() {
   }, [state, selectedId]);
 
   useEffect(() => {
-    dismissCopied(copiedTimer, setCopied);
+    dismissAction(actionTimer, setActionLabel);
+    setMenuOpen(false);
   }, [selectedId]);
 
   const editorOpen = draft !== null || editingId !== null;
@@ -86,9 +89,13 @@ export function App() {
       if (editorOpen) {
         return;
       }
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
-        copyRef.current();
+        sendRef.current();
         return;
       }
       if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) {
@@ -113,6 +120,20 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [editorOpen, searching]);
 
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !menuRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [menuOpen]);
+
   if (!state) {
     return <p className="p-3 text-xs opacity-80">Loading blueprints…</p>;
   }
@@ -125,86 +146,101 @@ export function App() {
     ? `Framework ${state.context.framework} · Language ${state.context.language}`
     : "Open a folder to scan the workspace.";
 
-  copyRef.current = () => {
+  const flash = (label: Exclude<ActionLabel, "idle">) => {
+    setActionLabel(label);
+    if (actionTimer.current !== null) {
+      window.clearTimeout(actionTimer.current);
+    }
+    actionTimer.current = window.setTimeout(() => {
+      setActionLabel("idle");
+      actionTimer.current = null;
+    }, 1500);
+  };
+
+  sendRef.current = () => {
     if (!selected) {
       return;
     }
-    vscode.postMessage({ type: "compile", id: selected.blueprint.id, values });
-    setCopied(true);
-    if (copiedTimer.current !== null) {
-      window.clearTimeout(copiedTimer.current);
+    setMenuOpen(false);
+    vscode.postMessage({ type: "compile", id: selected.blueprint.id, values, mode: "insert" });
+    flash("placed");
+  };
+
+  const copyPrompt = () => {
+    if (!selected) {
+      return;
     }
-    copiedTimer.current = window.setTimeout(() => {
-      setCopied(false);
-      copiedTimer.current = null;
-    }, 1500);
+    setMenuOpen(false);
+    vscode.postMessage({ type: "compile", id: selected.blueprint.id, values, mode: "copy" });
+    flash("copied");
   };
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2">
-        {notice && !draft && !editingExisting && <p className="error text-xs">{notice}</p>}
-        <BlueprintList
-          items={state.blueprints}
-          selectedId={selectedId}
-          searching={searching}
-          query={query}
-          contextHint={contextHint}
-          searchRef={searchRef}
-          onQueryChange={setQuery}
-          onOpenSearch={() => {
-            setQuery("");
-            setSearching(true);
-          }}
-          onCloseSearch={() => {
-            setSearching(false);
-            setQuery("");
-          }}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setSearching(false);
-            setQuery("");
-          }}
-          onToggleFavorite={(id) => vscode.postMessage({ type: "toggleFavorite", id })}
-          onEdit={(id) => {
-            setSearching(false);
-            setQuery("");
-            setDraft(null);
-            setSelectedId(id);
-            setNotice(null);
-            setEditingId(id);
-          }}
-          onCreate={(title) => {
-            const trimmed = title.trim();
-            setSearching(false);
-            setQuery("");
-            setNotice(null);
-            setEditingId(null);
-            setDraft({
-              id: slugifyTitle(trimmed),
-              title: trimmed,
-              version: "1.0.0",
-              tags: [],
-              variables: [],
-              changelog: [],
-              body: "",
-              filePath: "",
-            });
-          }}
-        />
-        {state.errors.length > 0 && (
-          <ul className="flex flex-col gap-1">
-            {state.errors.map((error) => (
-              <li key={`${error.filePath}:${error.message}`} className="error text-xs">
-                {error.filePath ? `${error.filePath}: ` : ""}
-                {error.message}
-              </li>
-            ))}
-          </ul>
-        )}
-        {selected && (
-          <div key={selected.blueprint.id} className="flex flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2">
+        <div className="sidebar-top flex flex-col gap-3">
+          {notice && !draft && !editingExisting && <p className="error text-xs">{notice}</p>}
+          <BlueprintList
+            items={state.blueprints}
+            selectedId={selectedId}
+            searching={searching}
+            query={query}
+            contextHint={contextHint}
+            searchRef={searchRef}
+            onQueryChange={setQuery}
+            onOpenSearch={() => {
+              setQuery("");
+              setSearching(true);
+            }}
+            onCloseSearch={() => {
+              setSearching(false);
+              setQuery("");
+            }}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setSearching(false);
+              setQuery("");
+            }}
+            onToggleFavorite={(id) => vscode.postMessage({ type: "toggleFavorite", id })}
+            onEdit={(id) => {
+              setSearching(false);
+              setQuery("");
+              setDraft(null);
+              setSelectedId(id);
+              setNotice(null);
+              setEditingId(id);
+            }}
+            onCreate={(title) => {
+              const trimmed = title.trim();
+              setSearching(false);
+              setQuery("");
+              setNotice(null);
+              setEditingId(null);
+              setDraft({
+                id: slugifyTitle(trimmed),
+                title: trimmed,
+                version: "1.0.0",
+                tags: [],
+                variables: [],
+                changelog: [],
+                body: "",
+                filePath: "",
+              });
+            }}
+          />
+          {state.errors.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {state.errors.map((error) => (
+                <li key={`${error.filePath}:${error.message}`} className="error text-xs">
+                  {error.filePath ? `${error.filePath}: ` : ""}
+                  {error.message}
+                </li>
+              ))}
+            </ul>
+          )}
+          {selected && (
             <VariableForm
+              key={selected.blueprint.id}
               variables={selected.blueprint.variables}
               values={values}
               dirty={dirty}
@@ -222,16 +258,35 @@ export function App() {
                 })
               }
             />
-            <Preview body={selected.blueprint.body} values={values} />
-          </div>
-        )}
+          )}
+        </div>
+        {selected && <Preview key={selected.blueprint.id} body={selected.blueprint.body} values={values} />}
       </div>
       {selected && (
         <div className="sticky-footer">
-          <button type="button" className="button w-full" onClick={() => copyRef.current()}>
-            <Icon name="copy" />
-            {copied ? "Copied" : "Copy"}
-          </button>
+          <div className="split-button" ref={menuRef}>
+            <button type="button" className="button split-main" onClick={() => sendRef.current()}>
+              <Icon name="send" />
+              {actionText(actionLabel)}
+            </button>
+            <button
+              type="button"
+              className="button split-caret"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label="More actions"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <Icon name="chevron" className="split-caret-icon" />
+            </button>
+            {menuOpen && (
+              <div role="menu" className="split-menu">
+                <button type="button" role="menuitem" className="split-menu-item" onClick={copyPrompt}>
+                  Copy
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -271,8 +326,20 @@ export function App() {
   );
 }
 
-function dismissCopied(timer: { current: number | null }, setFlag: (copied: boolean) => void): void {
-  setFlag(false);
+type ActionLabel = "idle" | "copied" | "placed";
+
+function actionText(label: ActionLabel): string {
+  if (label === "placed") {
+    return "Placed";
+  }
+  if (label === "copied") {
+    return "Copied";
+  }
+  return "Send to Agent";
+}
+
+function dismissAction(timer: { current: number | null }, setLabel: (label: ActionLabel) => void): void {
+  setLabel("idle");
   if (timer.current !== null) {
     window.clearTimeout(timer.current);
     timer.current = null;
