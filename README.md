@@ -68,6 +68,10 @@ npm test
 
 Press F5 and choose **Run Extension** to open an Extension Development Host with AgentForge loaded. Module boundaries are described in [AGENTS.md](AGENTS.md).
 
+## Contact
+
+Report bugs, or write about anything else, to [lorenzo.devia.rubio@gmail.com](mailto:lorenzo.devia.rubio@gmail.com).
+
 ## License
 
 AgentForge's own code is [BSD Zero Clause](LICENSE), Copyright (c) 2026 Lorenzo Devia Rubio.
