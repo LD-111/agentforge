@@ -1,6 +1,19 @@
 import type { ReactNode } from "react";
 
-export type IconName = "search" | "close" | "star" | "starFilled" | "pencil" | "plus" | "trash" | "copy" | "chevron" | "diff" | "send";
+export type IconName =
+  | "search"
+  | "close"
+  | "star"
+  | "starFilled"
+  | "pencil"
+  | "plus"
+  | "trash"
+  | "copy"
+  | "chevron"
+  | "diff"
+  | "send"
+  | "export"
+  | "import";
 
 interface IconProps {
   name: IconName;
@@ -54,6 +67,20 @@ const glyphs: Record<IconName, ReactNode> = {
     </>
   ),
   chevron: <path d="M6 3.5 10.5 8 6 12.5" />,
+  export: (
+    <>
+      <path d="M3 10.5V13h10v-2.5" />
+      <path d="M8 2.5v7" />
+      <path d="M5.2 5.2 8 2.5l2.8 2.7" />
+    </>
+  ),
+  import: (
+    <>
+      <path d="M3 10.5V13h10v-2.5" />
+      <path d="M8 9.5v-7" />
+      <path d="M5.2 6.8 8 9.5l2.8-2.7" />
+    </>
+  ),
   diff: (
     <>
       <rect x="1.75" y="2.5" width="5" height="11" rx="1" />

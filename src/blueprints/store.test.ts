@@ -74,6 +74,42 @@ describe("BlueprintStore", () => {
     expect(second).toContain("title: Kept");
   });
 
+  it("inserts a new blueprint and refuses an id that already exists", async () => {
+    const store = new BlueprintStore(await tempDir());
+    await store.insert(blueprint);
+
+    const result = await store.read(blueprint.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.blueprint.title).toBe(blueprint.title);
+    expect(await store.listHistory(blueprint.id)).toEqual([]);
+
+    await expect(store.insert({ ...blueprint, title: "Other", body: "Replaced." })).rejects.toThrow(
+      `A blueprint named ${blueprint.id} already exists.`,
+    );
+    const reread = await store.read(blueprint.id);
+    expect(reread.ok).toBe(true);
+    if (!reread.ok) {
+      return;
+    }
+    expect(reread.blueprint.title).toBe(blueprint.title);
+    expect(reread.blueprint.body).toBe(blueprint.body);
+  });
+
+  it("refuses to insert over a markdown file that already uses the id", async () => {
+    const root = await tempDir();
+    await writeFile(path.join(root, "broken.md"), "---\nid: broken\n---\n", "utf8");
+    const store = new BlueprintStore(root);
+
+    await expect(store.insert({ ...blueprint, id: "broken", title: "Broken" })).rejects.toThrow(
+      "A blueprint named broken already exists.",
+    );
+    const raw = await readFile(path.join(root, "broken.md"), "utf8");
+    expect(raw).not.toContain("title: Broken");
+  });
+
   it("returns a structured miss when the id does not exist", async () => {
     const store = new BlueprintStore(await tempDir());
     const result = await store.read("missing-blueprint");

@@ -94,6 +94,18 @@ export class BlueprintStore {
     await this.writeCurrent(blueprint);
   }
 
+  async insert(blueprint: Blueprint): Promise<void> {
+    this.assertId(blueprint.id);
+    if (!isSafeVersion(blueprint.version)) {
+      throw new Error(`Invalid blueprint version: ${blueprint.version}`);
+    }
+    const existing = await this.read(blueprint.id);
+    if (existing.ok || !existing.error.message.startsWith("Blueprint not found:")) {
+      throw new Error(`A blueprint named ${blueprint.id} already exists.`);
+    }
+    await this.writeCurrent(blueprint);
+  }
+
   async listHistory(id: string): Promise<Blueprint[]> {
     this.assertId(id);
     const directory = path.join(this.historyRoot(), id);

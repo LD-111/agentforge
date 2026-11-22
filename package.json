@@ -2,7 +2,7 @@
   "name": "agentforge",
   "displayName": "AgentForge",
   "description": "Local-first command center for versioned AI prompt blueprints.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "0BSD",
   "publisher": "agentforge",
   "repository": {

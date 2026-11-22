@@ -7,6 +7,7 @@
 - `state` — `SidebarState`: `blueprints` (`SidebarBlueprint` with blueprint, resolved `values`, and `history`), `errors`, and `context` (`WorkspaceContext` or `null`).
 - `notice` — `{ message }` for a recoverable failure.
 - `saved` — editor should close. Optional `id` selects the created blueprint.
+- `importPreview` — `{ items }` for a parsed share file. Each item is `{ id, title, version, tags, status, suggestedId }`. `status` is `"new"`, `"duplicate"`, or `"conflict"`.
 
 ## Webview to host (`WebviewMessage`)
 
@@ -17,6 +18,10 @@
 - `create` — `{ blueprint, note }` for a new id.
 - `diff` — `{ id, version }` opens the history snapshot against the current file.
 - `rollback` — `{ id, version }` restores that snapshot and archives the current file first.
+- `export` — `{ ids }` writes a share file for those blueprints.
+- `importPick` — host opens a JSON file and posts `importPreview`.
+- `importApply` — `{ items }`, each `{ sourceId, id }`, inserts the checked rows.
+- `importCancel` — drops the parsed share file held by the host.
 
 `HistoryEntry` is `{ version, note }`. The note comes from the snapshot changelog entry with the same version, or `""`.
 

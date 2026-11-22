@@ -16,6 +16,8 @@ interface BlueprintListProps {
   onToggleFavorite: (id: string) => void;
   onEdit: (id: string) => void;
   onCreate: (title: string) => void;
+  onExport: () => void;
+  onImport: () => void;
 }
 
 export function BlueprintList({
@@ -32,6 +34,8 @@ export function BlueprintList({
   onToggleFavorite,
   onEdit,
   onCreate,
+  onExport,
+  onImport,
 }: BlueprintListProps) {
   useEffect(() => {
     if (searching) {
@@ -78,6 +82,19 @@ export function BlueprintList({
           onClick={() => onCreate(query)}
         >
           <Icon name="plus" />
+        </button>
+        <button
+          type="button"
+          className="icon-button disabled:opacity-40"
+          aria-label="Export blueprints"
+          title="Export blueprints"
+          disabled={items.length === 0}
+          onClick={onExport}
+        >
+          <Icon name="export" />
+        </button>
+        <button type="button" className="icon-button" aria-label="Import blueprints" title="Import blueprints" onClick={onImport}>
+          <Icon name="import" />
         </button>
       </div>
       <p className="text-xs opacity-70">{contextHint}</p>

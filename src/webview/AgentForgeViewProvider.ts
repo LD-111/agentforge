@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
+import { readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { classifyImports, parseBundle, sameBlueprint, serializeBundle, type BundleBlueprint } from "../blueprints/bundle";
 import { compilePrompt } from "../blueprints/compile";
 import { isBlueprintId } from "../blueprints/id";
 import { resolveVariables } from "../blueprints/resolve";
@@ -7,13 +10,14 @@ import { BlueprintStore } from "../blueprints/store";
 import type { Blueprint, BlueprintVariable } from "../blueprints/types";
 import { isSafeVersion } from "../blueprints/version";
 import { scanWorkspace } from "../scanner/scanWorkspace";
-import type { HostMessage, SidebarBlueprint, SidebarState, WebviewMessage } from "../shared/protocol";
+import type { HostMessage, ImportSelection, SidebarBlueprint, SidebarState, WebviewMessage } from "../shared/protocol";
 import { copyAndFocus, insertIntoAgent } from "./launch";
 
 export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = "agentforge.sidebar";
 
   private view?: vscode.WebviewView;
+  private pendingImport: BundleBlueprint[] | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -114,6 +118,18 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
           return;
         case "rollback":
           await this.rollback(message.id, message.version);
+          return;
+        case "export":
+          await this.exportSet(message.ids);
+          return;
+        case "importPick":
+          await this.pickImport();
+          return;
+        case "importApply":
+          await this.applyImport(message.items);
+          return;
+        case "importCancel":
+          this.pendingImport = null;
           return;
         default:
           return;
@@ -232,6 +248,144 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
     await this.store.save(next);
     await this.post({ type: "saved", id });
     await this.refresh();
+  }
+
+  private async exportSet(ids: string[]): Promise<void> {
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
+      await this.notice("Choose blueprints to export.");
+      return;
+    }
+    const { blueprints } = await this.store.list();
+    const byId = new Map(blueprints.map((blueprint) => [blueprint.id, blueprint]));
+    const seen = new Set<string>();
+    const selected: BundleBlueprint[] = [];
+    for (const id of ids) {
+      if (seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      const found = byId.get(id);
+      if (found) {
+        selected.push(found);
+      }
+    }
+    if (selected.length === 0) {
+      await this.notice("Nothing to export.");
+      return;
+    }
+
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const defaultUri = folder
+      ? vscode.Uri.joinPath(folder, "agentforge-blueprints.json")
+      : vscode.Uri.file(path.join(os.homedir(), "agentforge-blueprints.json"));
+    const target = await vscode.window.showSaveDialog({
+      defaultUri,
+      filters: { "AgentForge blueprints": ["json"] },
+      saveLabel: "Export",
+    });
+    if (!target) {
+      return;
+    }
+    await writeFile(target.fsPath, serializeBundle(selected), "utf8");
+    await this.notice(countLabel("Exported", selected.length));
+  }
+
+  private async pickImport(): Promise<void> {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      filters: { "AgentForge blueprints": ["json"] },
+      openLabel: "Import",
+      title: "Import blueprint set",
+    });
+    if (!picked || picked.length === 0) {
+      return;
+    }
+    const parsed = parseBundle(await readFile(picked[0].fsPath, "utf8"));
+    if (!parsed.ok) {
+      await this.notice(parsed.message);
+      return;
+    }
+    if (parsed.blueprints.length === 0) {
+      await this.notice("The share file has no blueprints.");
+      return;
+    }
+    const { blueprints } = await this.store.list();
+    this.pendingImport = parsed.blueprints;
+    await this.post({ type: "importPreview", items: classifyImports(parsed.blueprints, blueprints) });
+  }
+
+  private async applyImport(items: ImportSelection[]): Promise<void> {
+    const pending = this.pendingImport;
+    if (!pending) {
+      await this.notice("Import that set again.");
+      return;
+    }
+    if (!isImportSelection(items)) {
+      await this.notice("The import selection was incomplete.");
+      return;
+    }
+    if (items.length === 0) {
+      await this.notice("Choose at least one blueprint to add.");
+      return;
+    }
+
+    const bySource = new Map(pending.map((blueprint) => [blueprint.id, blueprint]));
+    const { blueprints } = await this.store.list();
+    const existing = new Map(blueprints.map((blueprint) => [blueprint.id, blueprint]));
+    const seenSources = new Set<string>();
+    const chosenIds = new Set<string>();
+    const writes: Blueprint[] = [];
+
+    for (const item of items) {
+      const source = bySource.get(item.sourceId);
+      if (!source) {
+        await this.notice("That blueprint is no longer in the import.");
+        return;
+      }
+      if (seenSources.has(item.sourceId)) {
+        await this.notice(`${item.sourceId} is used more than once in this import.`);
+        return;
+      }
+      seenSources.add(item.sourceId);
+      const current = existing.get(source.id);
+      if (current && sameBlueprint(source, current)) {
+        continue;
+      }
+      const id = item.id.trim();
+      if (!isBlueprintId(id)) {
+        await this.notice(`${id || "(empty)"} is not a valid blueprint id.`);
+        return;
+      }
+      if (chosenIds.has(id)) {
+        await this.notice(`${id} is used more than once in this import.`);
+        return;
+      }
+      const occupied = await this.store.read(id);
+      if (occupied.ok || !occupied.error.message.startsWith("Blueprint not found:")) {
+        await this.notice(`${id} is already in your library.`);
+        return;
+      }
+      chosenIds.add(id);
+      writes.push({
+        id,
+        title: source.title,
+        version: source.version,
+        tags: [...source.tags],
+        variables: source.variables.map((variable) => ({ ...variable })),
+        changelog: source.changelog.map((entry) => ({ ...entry })),
+        body: source.body,
+        filePath: "",
+      });
+    }
+
+    for (const blueprint of writes) {
+      await this.store.insert(blueprint);
+    }
+    this.pendingImport = null;
+    await this.refresh();
+    await this.notice(countLabel("Added", writes.length));
   }
 
   private async showDiff(id: string, version: string): Promise<void> {
@@ -387,6 +541,24 @@ function cleanVariables(variables: BlueprintVariable[]): BlueprintVariable[] {
     }
     return next;
   });
+}
+
+function countLabel(verb: "Exported" | "Added", count: number): string {
+  return `${verb} ${count} blueprint${count === 1 ? "" : "s"}.`;
+}
+
+function isImportSelection(value: unknown): value is ImportSelection[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        !Array.isArray(item) &&
+        typeof (item as { sourceId?: unknown }).sourceId === "string" &&
+        typeof (item as { id?: unknown }).id === "string",
+    )
+  );
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

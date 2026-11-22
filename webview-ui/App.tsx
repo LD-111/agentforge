@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { slugifyTitle } from "../src/blueprints/id";
 import type { Blueprint } from "../src/blueprints/types";
-import type { HostMessage, SidebarBlueprint, SidebarState } from "../src/shared/protocol";
+import type { HostMessage, ImportPreviewItem, SidebarBlueprint, SidebarState } from "../src/shared/protocol";
 import { BlueprintList, compareBlueprints } from "./BlueprintList";
 import { EditorModal } from "./EditorModal";
+import { ExportModal } from "./ExportModal";
 import { Icon } from "./Icon";
+import { ImportModal } from "./ImportModal";
 import { Preview } from "./Preview";
 import { VariableForm } from "./VariableForm";
 
@@ -21,6 +23,8 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [actionLabel, setActionLabel] = useState<ActionLabel>("idle");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importItems, setImportItems] = useState<ImportPreviewItem[] | null>(null);
   const pendingSelect = useRef<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const actionTimer = useRef<number | null>(null);
@@ -38,6 +42,16 @@ export function App() {
       } else if (message.type === "notice") {
         setNotice(message.message);
         dismissAction(actionTimer, setActionLabel);
+        if (message.message.startsWith("Added ")) {
+          setImportItems(null);
+        }
+      } else if (message.type === "importPreview") {
+        if (!Array.isArray(message.items)) {
+          return;
+        }
+        setImportItems(message.items);
+        setExporting(false);
+        setNotice(null);
       } else if (message.type === "saved") {
         if (message.id) {
           pendingSelect.current = message.id;
@@ -83,7 +97,7 @@ export function App() {
     setMenuOpen(false);
   }, [selectedId]);
 
-  const editorOpen = draft !== null || editingId !== null;
+  const editorOpen = draft !== null || editingId !== null || exporting || importItems !== null;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (editorOpen) {
@@ -179,7 +193,7 @@ export function App() {
     <div className="relative flex h-full min-h-0 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2">
         <div className="sidebar-top flex flex-col gap-3">
-          {notice && !draft && !editingExisting && <p className="error text-xs">{notice}</p>}
+          {notice && !draft && !editingExisting && !importItems && <p className="error text-xs">{notice}</p>}
           <BlueprintList
             items={state.blueprints}
             selectedId={selectedId}
@@ -209,6 +223,18 @@ export function App() {
               setSelectedId(id);
               setNotice(null);
               setEditingId(id);
+            }}
+            onExport={() => {
+              setSearching(false);
+              setQuery("");
+              setNotice(null);
+              setExporting(true);
+            }}
+            onImport={() => {
+              setSearching(false);
+              setQuery("");
+              setNotice(null);
+              vscode.postMessage({ type: "importPick" });
             }}
             onCreate={(title) => {
               const trimmed = title.trim();
@@ -320,6 +346,33 @@ export function App() {
           onSave={(blueprint: Blueprint, note: string) => vscode.postMessage({ type: "save", blueprint, note })}
           onDiff={(version) => vscode.postMessage({ type: "diff", id: editingExisting.blueprint.id, version })}
           onRollback={(version) => vscode.postMessage({ type: "rollback", id: editingExisting.blueprint.id, version })}
+        />
+      )}
+      {exporting && !importItems && (
+        <ExportModal
+          items={[...state.blueprints].sort(compareBlueprints).map((item) => ({
+            id: item.blueprint.id,
+            title: item.blueprint.title,
+            version: item.blueprint.version,
+          }))}
+          onClose={() => setExporting(false)}
+          onExport={(ids) => {
+            setExporting(false);
+            vscode.postMessage({ type: "export", ids });
+          }}
+        />
+      )}
+      {importItems && (
+        <ImportModal
+          key={importItems.map((item) => `${item.id}:${item.status}:${item.suggestedId}`).join("|")}
+          items={importItems}
+          notice={notice}
+          onClose={() => {
+            setImportItems(null);
+            setNotice(null);
+            vscode.postMessage({ type: "importCancel" });
+          }}
+          onApply={(items) => vscode.postMessage({ type: "importApply", items })}
         />
       )}
     </div>

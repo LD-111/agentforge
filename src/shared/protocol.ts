@@ -59,6 +59,29 @@ export interface RollbackMessage {
   version: string;
 }
 
+export interface ExportMessage {
+  type: "export";
+  ids: string[];
+}
+
+export interface ImportPickMessage {
+  type: "importPick";
+}
+
+export interface ImportSelection {
+  sourceId: string;
+  id: string;
+}
+
+export interface ImportApplyMessage {
+  type: "importApply";
+  items: ImportSelection[];
+}
+
+export interface ImportCancelMessage {
+  type: "importCancel";
+}
+
 export type WebviewMessage =
   | ReadyMessage
   | CompileMessage
@@ -66,7 +89,11 @@ export type WebviewMessage =
   | SaveMessage
   | CreateMessage
   | DiffMessage
-  | RollbackMessage;
+  | RollbackMessage
+  | ExportMessage
+  | ImportPickMessage
+  | ImportApplyMessage
+  | ImportCancelMessage;
 
 export interface NoticeMessage {
   type: "notice";
@@ -78,4 +105,18 @@ export interface SavedMessage {
   id?: string;
 }
 
-export type HostMessage = SidebarState | NoticeMessage | SavedMessage;
+export interface ImportPreviewItem {
+  id: string;
+  title: string;
+  version: string;
+  tags: string[];
+  status: "new" | "duplicate" | "conflict";
+  suggestedId: string;
+}
+
+export interface ImportPreviewMessage {
+  type: "importPreview";
+  items: ImportPreviewItem[];
+}
+
+export type HostMessage = SidebarState | NoticeMessage | SavedMessage | ImportPreviewMessage;
