@@ -119,4 +119,8 @@ export interface ImportPreviewMessage {
   items: ImportPreviewItem[];
 }
 
-export type HostMessage = SidebarState | NoticeMessage | SavedMessage | ImportPreviewMessage;
+export interface ImportedMessage {
+  type: "imported";
+}
+
+export type HostMessage = SidebarState | NoticeMessage | SavedMessage | ImportPreviewMessage | ImportedMessage;

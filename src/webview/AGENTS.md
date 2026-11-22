@@ -13,13 +13,13 @@ Extension-side owner of the sidebar. This is the only `src` folder that should i
 
 ## Commands and messages
 
-`compileFromPalette` quick-picks favorites first, then title, and copies the already resolved values. `onMessage` handles every `WebviewMessage`. Unknown types are ignored. Thrown errors become a `notice`.
+`compileFromPalette` quick-picks favorites first, then title, and copies the already resolved values. `onMessage` handles every `WebviewMessage`. Unknown types are ignored. Thrown errors become a `notice`, except `export`, `importPick`, and `importApply`, which use `showErrorMessage`.
 
 Save and create require a title, a safe version, unique variable names matching `^[A-Za-z0-9_]+$`, and a non-empty source per variable. A version change on save, and every create, requires an evolution note. The note is prepended to the changelog only when the version changes. Create rejects ids that fail `isBlueprintId` and ids that already exist.
 
 `showDiff` uses `vscode.diff` on the history file and the current file. `rollback` goes through `BlueprintStore.rollback`.
 
-`export` keeps ids that exist, opens a save dialog defaulting to `agentforge-blueprints.json`, and writes the bundle from [bundle.ts](../blueprints/bundle.ts). Cancel is silent. When none of the ids exist, it notices `Nothing to export.` `importPick` opens one JSON file. A parse failure or an empty blueprint list notices and does not change the library. A parsed file is kept on the provider and posted as `importPreview`. `importApply` re-reads the store, skips sources that are now exact copies, and `insert`s the rest. It does not call `save`. An unsafe id, a repeated id, or an id already on disk notices that id and writes nothing. The imported changelog is kept and no evolution note is required. Success notices `Added N blueprint` or `Added N blueprints`. `importCancel`, and a new `importPick`, drop the pending file.
+`export` keeps ids that exist, opens a save dialog defaulting to `agentforge-blueprints.json`, and writes the bundle from [bundle.ts](../blueprints/bundle.ts). Cancel is silent. When none of the ids exist, `showErrorMessage` says `Nothing to export.` Success uses `showInformationMessage` (`Exported N blueprint` or `Exported N blueprints`). `importPick` opens one JSON file. A parse failure or an empty blueprint list uses `showErrorMessage` and does not change the library. A parsed file is kept on the provider and posted as `importPreview`. `importApply` re-reads the store, skips sources that are now exact copies, and `insert`s the rest. It does not call `save`. An unsafe id, a repeated id, or an id already on disk uses `showErrorMessage` with that id and writes nothing. The checklist stays open. The imported changelog is kept and no evolution note is required. Success posts `imported` and uses `showInformationMessage` (`Added N blueprint` or `Added N blueprints`). It does not post a sidebar `notice`. `importCancel`, and a new `importPick`, drop the pending file.
 
 `copyAndFocus` writes the clipboard, then tries `composerMode.agent` and `aichat.newchataction`. If neither command exists, it tells the user to open the agent input and paste.
 

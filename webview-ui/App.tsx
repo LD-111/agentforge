@@ -42,9 +42,9 @@ export function App() {
       } else if (message.type === "notice") {
         setNotice(message.message);
         dismissAction(actionTimer, setActionLabel);
-        if (message.message.startsWith("Added ")) {
-          setImportItems(null);
-        }
+      } else if (message.type === "imported") {
+        setImportItems(null);
+        setNotice(null);
       } else if (message.type === "importPreview") {
         if (!Array.isArray(message.items)) {
           return;
@@ -156,10 +156,6 @@ export function App() {
   const editingExisting = state.blueprints.find((item) => item.blueprint.id === editingId) ?? null;
   const values = selected ? effectiveValues(selected, overrides[selected.blueprint.id]) : {};
   const dirty = selected ? hasOverride(overrides[selected.blueprint.id]) : false;
-  const contextHint = state.context
-    ? `Framework ${state.context.framework} · Language ${state.context.language}`
-    : "Open a folder to scan the workspace.";
-
   const flash = (label: Exclude<ActionLabel, "idle">) => {
     setActionLabel(label);
     if (actionTimer.current !== null) {
@@ -199,7 +195,7 @@ export function App() {
             selectedId={selectedId}
             searching={searching}
             query={query}
-            contextHint={contextHint}
+            folderHint={state.context ? null : "Open a folder to scan the workspace."}
             searchRef={searchRef}
             onQueryChange={setQuery}
             onOpenSearch={() => {
@@ -366,7 +362,6 @@ export function App() {
         <ImportModal
           key={importItems.map((item) => `${item.id}:${item.status}:${item.suggestedId}`).join("|")}
           items={importItems}
-          notice={notice}
           onClose={() => {
             setImportItems(null);
             setNotice(null);

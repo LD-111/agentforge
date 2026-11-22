@@ -7,7 +7,7 @@ interface BlueprintListProps {
   selectedId: string | null;
   searching: boolean;
   query: string;
-  contextHint: string;
+  folderHint: string | null;
   searchRef: RefObject<HTMLInputElement | null>;
   onQueryChange: (query: string) => void;
   onOpenSearch: () => void;
@@ -25,7 +25,7 @@ export function BlueprintList({
   selectedId,
   searching,
   query,
-  contextHint,
+  folderHint,
   searchRef,
   onQueryChange,
   onOpenSearch,
@@ -97,7 +97,7 @@ export function BlueprintList({
           <Icon name="import" />
         </button>
       </div>
-      <p className="text-xs opacity-70">{contextHint}</p>
+      {folderHint && <p className="text-xs opacity-70">{folderHint}</p>}
       {visible.length === 0 && items.length === 0 && <p className="text-xs opacity-80">No blueprints in ~/.agentforge/blueprints.</p>}
       {searching && visible.length === 0 && items.length > 0 && <p className="text-xs opacity-80">No matching blueprints.</p>}
       <ul className="flex flex-col gap-0.5">

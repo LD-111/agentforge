@@ -136,6 +136,11 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
       }
     } catch (error) {
       const text = error instanceof Error ? error.message : "AgentForge could not complete that action.";
+      const share = message?.type === "export" || message?.type === "importPick" || message?.type === "importApply";
+      if (share) {
+        this.shareMessage(text, "error");
+        return;
+      }
       await this.notice(text);
     }
   }
@@ -252,7 +257,7 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
 
   private async exportSet(ids: string[]): Promise<void> {
     if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
-      await this.notice("Choose blueprints to export.");
+      this.shareMessage("Choose blueprints to export.", "error");
       return;
     }
     const { blueprints } = await this.store.list();
@@ -270,7 +275,7 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
       }
     }
     if (selected.length === 0) {
-      await this.notice("Nothing to export.");
+      this.shareMessage("Nothing to export.", "error");
       return;
     }
 
@@ -287,7 +292,7 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     await writeFile(target.fsPath, serializeBundle(selected), "utf8");
-    await this.notice(countLabel("Exported", selected.length));
+    this.shareMessage(countLabel("Exported", selected.length), "info");
   }
 
   private async pickImport(): Promise<void> {
@@ -304,11 +309,11 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
     }
     const parsed = parseBundle(await readFile(picked[0].fsPath, "utf8"));
     if (!parsed.ok) {
-      await this.notice(parsed.message);
+      this.shareMessage(parsed.message, "error");
       return;
     }
     if (parsed.blueprints.length === 0) {
-      await this.notice("The share file has no blueprints.");
+      this.shareMessage("The share file has no blueprints.", "error");
       return;
     }
     const { blueprints } = await this.store.list();
@@ -319,15 +324,15 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
   private async applyImport(items: ImportSelection[]): Promise<void> {
     const pending = this.pendingImport;
     if (!pending) {
-      await this.notice("Import that set again.");
+      this.shareMessage("Import that set again.", "error");
       return;
     }
     if (!isImportSelection(items)) {
-      await this.notice("The import selection was incomplete.");
+      this.shareMessage("The import selection was incomplete.", "error");
       return;
     }
     if (items.length === 0) {
-      await this.notice("Choose at least one blueprint to add.");
+      this.shareMessage("Choose at least one blueprint to add.", "error");
       return;
     }
 
@@ -341,11 +346,11 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
     for (const item of items) {
       const source = bySource.get(item.sourceId);
       if (!source) {
-        await this.notice("That blueprint is no longer in the import.");
+        this.shareMessage("That blueprint is no longer in the import.", "error");
         return;
       }
       if (seenSources.has(item.sourceId)) {
-        await this.notice(`${item.sourceId} is used more than once in this import.`);
+        this.shareMessage(`${item.sourceId} is used more than once in this import.`, "error");
         return;
       }
       seenSources.add(item.sourceId);
@@ -355,16 +360,16 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
       }
       const id = item.id.trim();
       if (!isBlueprintId(id)) {
-        await this.notice(`${id || "(empty)"} is not a valid blueprint id.`);
+        this.shareMessage(`${id || "(empty)"} is not a valid blueprint id.`, "error");
         return;
       }
       if (chosenIds.has(id)) {
-        await this.notice(`${id} is used more than once in this import.`);
+        this.shareMessage(`${id} is used more than once in this import.`, "error");
         return;
       }
       const occupied = await this.store.read(id);
       if (occupied.ok || !occupied.error.message.startsWith("Blueprint not found:")) {
-        await this.notice(`${id} is already in your library.`);
+        this.shareMessage(`${id} is already in your library.`, "error");
         return;
       }
       chosenIds.add(id);
@@ -385,7 +390,8 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
     }
     this.pendingImport = null;
     await this.refresh();
-    await this.notice(countLabel("Added", writes.length));
+    await this.post({ type: "imported" });
+    this.shareMessage(countLabel("Added", writes.length), "info");
   }
 
   private async showDiff(id: string, version: string): Promise<void> {
@@ -440,6 +446,14 @@ export class AgentForgeViewProvider implements vscode.WebviewViewProvider {
 
   private async notice(message: string): Promise<void> {
     await this.post({ type: "notice", message });
+  }
+
+  private shareMessage(message: string, severity: "info" | "error"): void {
+    if (severity === "error") {
+      void vscode.window.showErrorMessage(message);
+      return;
+    }
+    void vscode.window.showInformationMessage(message);
   }
 
   private async post(message: HostMessage): Promise<void> {

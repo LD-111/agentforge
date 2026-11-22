@@ -4,7 +4,6 @@ import { Icon } from "./Icon";
 
 interface ImportModalProps {
   items: ImportPreviewItem[];
-  notice: string | null;
   onClose: () => void;
   onApply: (items: ImportSelection[]) => void;
 }
@@ -14,7 +13,7 @@ interface RowState {
   id: string;
 }
 
-export function ImportModal({ items, notice, onClose, onApply }: ImportModalProps) {
+export function ImportModal({ items, onClose, onApply }: ImportModalProps) {
   const [rows, setRows] = useState<Record<string, RowState>>(() => {
     const initial: Record<string, RowState> = {};
     for (const item of items) {
@@ -54,7 +53,6 @@ export function ImportModal({ items, notice, onClose, onApply }: ImportModalProp
         </button>
       </div>
       <p className="text-xs opacity-70">Choose which blueprints to add. Nothing already in your library is replaced.</p>
-      {notice && <p className="error text-xs">{notice}</p>}
       <ul className="flex flex-col gap-2">
         {items.map((item) => {
           const row = rows[item.id];

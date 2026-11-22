@@ -8,6 +8,7 @@
 - `notice` — `{ message }` for a recoverable failure.
 - `saved` — editor should close. Optional `id` selects the created blueprint.
 - `importPreview` — `{ items }` for a parsed share file. Each item is `{ id, title, version, tags, status, suggestedId }`. `status` is `"new"`, `"duplicate"`, or `"conflict"`.
+- `imported` — the import overlay should close. Export and import results are VS Code popups, not this message.
 
 ## Webview to host (`WebviewMessage`)
 
